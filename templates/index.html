@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orb AI Assistant</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600&display=swap');
+        
+        :root {
+            --primary-color: #6e48aa;
+            --secondary-color: #9d50bb;
+            --glow-color: rgba(110, 72, 170, 0.6);
+            --response-color: rgba(255, 255, 255, 0.9);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: #121212;
+            font-family: 'Montserrat', sans-serif;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            color: white;
+        }
+        
+        .orb-container {
+            position: relative;
+            width: 400px;
+            height: 400px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .orb {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 0 60px var(--glow-color);
+            animation: pulse 4s infinite alternate;
+            cursor: pointer;
+        }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 30px var(--glow-color); }
+            100% { box-shadow: 0 0 80px var(--glow-color); }
+        }
+        
+        .orb::before {
+            content: '';
+            position: absolute;
+            width: 90%;
+            height: 90%;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .orb-center {
+            width: 120px;
+            height: 120px;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: all 0.3s;
+            box-shadow: 0 0 20px rgba(110, 72, 170, 0.8);
+            z-index: 10;
+            pointer-events: none;
+        }
+        
+        .orb.active .orb-center {
+            transform: scale(1.1);
+            box-shadow: 0 0 40px rgba(110, 72, 170, 0.9);
+        }
+        
+        .orb-center i {
+            font-size: 36px;
+            color: white;
+            transition: all 0.3s;
+        }
+        
+        .orb.active .orb-center i {
+            transform: scale(1.2);
+        }
+        
+        .response-display {
+            position: absolute;
+            width: 90%; /* Changed from 70% to 90% */
+            text-align: center;
+            font-size: 18px;
+            font-weight: 300;
+            opacity: 0;
+            transition: opacity 0.5s;
+            z-index: 5;
+            color: var(--response-color);
+            text-shadow: 0 0 10px rgba(0,0,0,0.5);
+            pointer-events: none;
+            top: 67.5%; /* Adjusted to position below the center and expand downwards */
+            height: auto; /* Allow height to adjust based on content */
+            max-height: 30%; /* Limit maximum height within the orb */
+            overflow-y: auto; /* Add scrollbar if content overflows vertically */
+            padding: 10px; /* Add padding for better readability */
+        }
+        
+        .response-display.visible {
+            opacity: 1;
+        }
+        
+        .voice-wave {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            animation: voiceWave 2s infinite;
+            pointer-events: none;
+            opacity: 0;
+        }
+        
+        @keyframes voiceWave {
+            0% { transform: scale(1); opacity: 1; border-color: rgba(255, 255, 255, 0.3); }
+            100% { transform: scale(1.3); opacity: 0; border-color: rgba(255, 255, 255, 0); }
+        }
+        
+        .voice-wave.active {
+            animation: voiceWave 1.5s infinite;
+            opacity: 1;
+        }
+        
+        .status {
+            position: absolute;
+            bottom: 10px;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.7);
+            text-align: center;
+            width: 100%;
+            pointer-events: none;
+        }
+        
+        .particle {
+            position: absolute;
+            background: white;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        .click-ripple {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            transform: scale(0);
+            animation: ripple 0.6s linear;
+            pointer-events: none;
+        }
+        
+        @keyframes ripple {
+            to { transform: scale(4); opacity: 0; }
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <div class="orb-container">
+        <div class="orb" id="orb">
+            <div class="voice-wave"></div>
+            <div class="response-display"></div> <!-- Initial text will be set by JS -->
+            <div class="orb-center">
+                <i class="fas fa-microphone"></i>
+            </div>
+        </div>
+        <div class="status">Ready</div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const orb = document.getElementById('orb');
+            const responseDisplay = document.querySelector('.response-display');
+            const voiceWave = document.querySelector('.voice-wave');
+            const statusDisplay = document.querySelector('.status');
+            let isListening = false;
+            let isProcessingCommand = false; // Flag to indicate if a command is being processed
+            
+            // Helper function to reset all relevant UI elements to the initial state
+            function resetUiToTapToSpeak() {
+                responseDisplay.textContent = "";
+                responseDisplay.classList.remove('visible');
+                updateResponse("Tap anywhere to speak");
+                isProcessingCommand = false;
+                stopListeningVisuals();
+            }
+
+            // Function to reset only the listening-related visuals
+            function stopListeningVisuals() {
+                isListening = false;
+                orb.classList.remove('active');
+                voiceWave.classList.remove('active');
+                statusDisplay.textContent = "Ready";
+            }
+
+            // Initialize speech recognition
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            let recognition;
+            
+            if (SpeechRecognition) {
+                recognition = new SpeechRecognition();
+                recognition.continuous = false; // Changed to false: Process one command at a time
+                recognition.interimResults = true; // Show interim results
+                recognition.lang = 'en-US';
+                
+                recognition.onstart = function() {
+                    isListening = true;
+                    orb.classList.add('active');
+                    voiceWave.classList.add('active');
+                    statusDisplay.textContent = "Listening...";
+                    updateResponse("I'm listening...");
+                };
+                
+                recognition.onresult = function(event) {
+                    let interimTranscript = '';
+                    let finalTranscript = '';
+
+                    for (let i = 0; i < event.results.length; ++i) {
+                        const transcript = event.results[i][0].transcript;
+                        if (event.results[i].isFinal) {
+                            finalTranscript += transcript;
+                        } else {
+                            interimTranscript += transcript;
+                        }
+                    }
+                    
+                    // Display interim results to give live feedback
+                    updateResponse(finalTranscript || interimTranscript || "I'm listening..."); 
+
+                    if (finalTranscript) {
+                        isProcessingCommand = true; // Set flag when a final transcript is obtained
+                        
+                        // Add a slight delay here to allow the user to see their final spoken text
+                        setTimeout(() => {
+                            processVoiceCommand(finalTranscript);
+                        }, 800); // Adjust this delay (in milliseconds) as needed
+                    }
+                };
+                
+                recognition.onerror = function(event) {
+                    console.error('Speech recognition error', event.error);
+                    const errorMsg = "Sorry, I didn't catch that";
+                    updateResponse(errorMsg);
+                    speakText(errorMsg, true); // Pass true to force reset after error speech
+                };
+                
+                recognition.onend = function() {
+                    // This fires when the speech recognition service disconnects.
+                    // If a command is NOT being processed, it means recognition stopped
+                    // without a final command (e.g., user paused or moved away from mic).
+                    // In this case, we reset the UI to "Tap anywhere to speak".
+                    if (!isProcessingCommand) {
+                        resetUiToTapToSpeak();
+                    }
+                    // If isProcessingCommand is true, speakText.onend will handle the final UI reset.
+                    stopListeningVisuals(); // Always stop visuals when recognition ends
+                };
+            } else {
+                statusDisplay.textContent = "Voice not supported in your browser";
+                const errorMsg = "Voice commands not available";
+                updateResponse(errorMsg);
+                speakText(errorMsg, true); // Force reset
+            }
+            
+            // Click handler for the entire orb
+            orb.addEventListener('click', function(e) {
+                if (!recognition) {
+                    createClickRipple(e);
+                    const msg = "Voice commands not supported";
+                    updateResponse(msg);
+                    speakText(msg, true); // Force reset
+                    setTimeout(() => {
+                        const fallbackMsg = "Try typing instead";
+                        updateResponse(fallbackMsg);
+                        speakText(fallbackMsg, true); // Force reset
+                    }, 2000);
+                    return;
+                }
+                
+                // If speech is currently ongoing, stop it.
+                if (speechSynthesis.speaking) {
+                    speechSynthesis.cancel();
+                    isProcessingCommand = false; // Crucial: Reset this flag when speech is manually stopped
+                    resetUiToTapToSpeak(); // Reset UI immediately when speech is stopped manually
+                    return; // Exit function after stopping speech
+                }
+
+                // If currently listening, stop recognition.
+                if (isListening) {
+                    recognition.stop();
+                } else {
+                    // Otherwise, start recognition.
+                    try {
+                        createClickRipple(e);
+                        recognition.start();
+                    } catch(e) {
+                        const errMsg = "Microphone access needed";
+                        updateResponse(errMsg);
+                        speakText(errMsg, true); // Force reset
+                        console.error('Recognition error:', e);
+                    }
+                }
+            });
+            
+            // Create floating particles
+            createParticles();
+            
+            function updateResponse(text) {
+                responseDisplay.textContent = text;
+                responseDisplay.classList.add('visible');
+            }
+            
+            async function processVoiceCommand(command) {
+                updateResponse("Thinking..."); // Show thinking status
+                try {
+                    const response = await fetch('/chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ message: command })
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    
+                    const data = await response.json();
+                    const aiResponse = data.response;
+                    
+                    speakText(aiResponse); // Speak the AI's response; its 'onend' will handle UI reset
+                    
+                    // Create visual feedback for speech (particles)
+                    createSpeechParticles(aiResponse.length);
+                    
+                } catch (error) {
+                    console.error('Error fetching AI response:', error);
+                    const errorMsg = "Sorry, I can't connect to the server.";
+                    updateResponse(errorMsg);
+                    speakText(errorMsg, true); // Force reset after error message
+                }
+            }
+            
+            // Added isInitialOrErrorPrompt parameter to handle immediate UI reset for specific cases
+            function speakText(text, isInitialOrErrorPrompt = false) {
+                if ('speechSynthesis' in window) {
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.voice = speechSynthesis.getVoices().find(v => v.lang === 'en-US');
+                    
+                    // Only attach onend listener if it's NOT an initial/error prompt.
+                    // For AI responses, we want to wait until speech finishes to reset UI.
+                    if (!isInitialOrErrorPrompt) {
+                        utterance.onend = () => {
+                            resetUiToTapToSpeak(); // Reset UI after speech is finished
+                        };
+                    }
+
+                    speechSynthesis.speak(utterance);
+
+                    // If it's an initial/error prompt, reset UI immediately after speaking starts
+                    // (since these are typically short announcements).
+                    if (isInitialOrErrorPrompt) {
+                        // Removed immediate reset for initial/error prompts here to prevent race conditions.
+                        // The `onend` for these will now also call resetUiToTapToSpeak, ensuring consistency.
+                    }
+
+                } else {
+                    // Fallback for no speech synthesis: reset UI immediately
+                    console.log("Speech synthesis not supported.");
+                    resetUiToTapToSpeak();
+                }
+            }
+            
+            function createParticles() {
+                const particleCount = 30;
+                
+                for (let i = 0; i < particleCount; i++) {
+                    const particle = document.createElement('div');
+                    particle.classList.add('particle');
+                    
+                    // Random properties
+                    const size = Math.random() * 3 + 1;
+                    const posX = Math.random() * 100;
+                    const posY = Math.random() * 100;
+                    const delay = Math.random() * 10;
+                    const duration = Math.random() * 20 + 10;
+                    const opacity = Math.random() * 0.5 + 0.1;
+                    
+                    // Set properties
+                    particle.style.width = `${size}px`;
+                    particle.style.height = `${size}px`;
+                    particle.style.left = `${posX}%`;
+                    particle.style.top = `${posY}%`;
+                    particle.style.opacity = opacity;
+                    particle.style.animation = `float ${duration}s linear ${delay}s infinite`;
+                    
+                    // Add to orb
+                    orb.appendChild(particle);
+                }
+                
+                // Add floating animation
+                const style = document.createElement('style');
+                style.innerHTML = `
+                    @keyframes float {
+                        0% { transform: translate(0, 0) rotate(0deg); }
+                        25% { transform: translate(10px, -10px) rotate(90deg); }
+                        50% { transform: translate(20px, 0) rotate(180deg); }
+                        75% { transform: translate(10px, 10px) rotate(270deg); }
+                        100% { transform: translate(0, 0) rotate(360deg); }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+            
+            function createSpeechParticles(length) {
+                const particleCount = Math.min(length, 20);
+                
+                for (let i = 0; i < particleCount; i++) {
+                    const particle = document.createElement('div');
+                    particle.classList.add('particle');
+                    particle.style.background = `hsl(${Math.random() * 60 + 270}, 80%, 70%)`;
+                    
+                    // Random properties
+                    const size = Math.random() * 4 + 2;
+                    const angle = Math.random() * Math.PI * 2;
+                    const distance = Math.random() * 100 + 50;
+                    const duration = Math.random() * 1 + 0.5;
+                    
+                    // Starting position (center)
+                    particle.style.width = `${size}px`;
+                    particle.style.height = `${size}px`;
+                    particle.style.left = `calc(50% - ${size/2}px)`;
+                    particle.style.top = `calc(50% - ${size/2}px)`;
+                    
+                    // Animate outward
+                    setTimeout(() => {
+                        particle.style.transition = `all ${duration}s ease-out`;
+                        particle.style.transform = `translate(${Math.cos(angle) * distance}px, ${Math.sin(angle) * distance}px)`;
+                        particle.style.opacity = '0';
+                    }, 10);
+                    
+                    // Remove after animation
+                    setTimeout(() => {
+                        particle.remove();
+                    }, duration * 1000 + 100);
+                    
+                    orb.appendChild(particle);
+                }
+            }
+            
+            function createClickRipple(event) {
+                const ripple = document.createElement('div');
+                ripple.classList.add('click-ripple');
+                
+                // Position at click coordinates
+                const rect = orb.getBoundingClientRect();
+                const x = event.clientX - rect.left;
+                const y = event.clientY - rect.top;
+                
+                ripple.style.left = `${x}px`;
+                ripple.style.top = `${y}px`;
+                ripple.style.width = `${rect.width/4}px`;
+                ripple.style.height = `${rect.width/4}px`;
+                
+                orb.appendChild(ripple);
+                
+                // Remove after animation
+                setTimeout(() => {
+                    ripple.remove();
+                }, 600);
+            }
+            
+            // Initial instructions: Display "Tap anywhere to speak"
+            setTimeout(() => {
+                updateResponse("Tap anywhere to speak");
+                // Removed the `speakText` call here to prevent double-speaking the initial prompt.
+                // The `updateResponse` is sufficient for the visual display.
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
