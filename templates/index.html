@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -364,7 +364,7 @@
             function speakText(text, isInitialOrErrorPrompt = false) {
                 if ('speechSynthesis' in window) {
                     const utterance = new SpeechSynthesisUtterance(text);
-                    utterance.voice = speechSynthesis.getVoices().find(v => v.lang === 'en-US');
+                    utterance.voice = speechSynthesis.getVoices().find(v => v.lang === 'fil-PH');
                     
                     // Only attach onend listener if it's NOT an initial/error prompt.
                     // For AI responses, we want to wait until speech finishes to reset UI.
