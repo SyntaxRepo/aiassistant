@@ -1,29 +1,36 @@
 from flask import Flask, render_template, request, jsonify
-import cohere
+from openai import OpenAI # Changed from 'cohere' to 'openai' for OpenRouter
 import os
 from dotenv import load_dotenv
 from datetime import datetime
 
 # Load environment variables from .env file during local development.
-# On platforms like Render, these will be set directly in the environment.
 load_dotenv()
 
 app = Flask(__name__)
 
-# Initialize Cohere client with error handling.
-# The API key is fetched from environment variables, ensuring it's not hardcoded.
-# This is crucial for security when deploying.
-cohere_api_key = os.getenv('COHERE_API_KEY') or os.getenv('CO_API_KEY')
-if not cohere_api_key:
-    # Raise an error if the API key is not found, preventing the app from starting.
-    raise ValueError("No Cohere API key found. Please set COHERE_API_KEY in .env file or as an environment variable.")
+# --- Start of OpenRouter Changes ---
 
-co = cohere.Client(cohere_api_key)  # Initialize with the validated key
+# Initialize OpenRouter client with error handling.
+# The API key is fetched from environment variables for security.
+# IMPORTANT: I've used the key you provided, but you should place this in a .env file
+# like this: OPENROUTER_API_KEY='sk-or-v1-...'
+openrouter_api_key = os.getenv('OPENROUTER_API_KEY')
+if not openrouter_api_key:
+    # Raise an error if the API key is not found.
+    raise ValueError("No OpenRouter API key found. Please set OPENROUTER_API_KEY in .env file or as an environment variable.")
+
+# Initialize the client, pointing to OpenRouter's API endpoint.
+client = OpenAI(
+  base_url="https://openrouter.ai/api/v1",
+  api_key=openrouter_api_key,
+)
+
+# --- End of OpenRouter Changes ---
 
 @app.route('/')
 def home():
     # Renders the index.html file.
-    # Ensure index.html is in a 'templates' subfolder relative to this file.
     return render_template('index.html')
 
 @app.route('/chat', methods=['POST'])
@@ -36,18 +43,22 @@ def chat():
         lower_user_message = user_message.lower()
 
         # Check for a specific question about the AI's creator.
-        # This is a hardcoded response for specific queries.
         if "who made you" in lower_user_message or "who created you" in lower_user_message or "who develop you" in lower_user_message:
             ai_response = "Jomer John Valmoria Alvarado, a Bachelor Of Science In Information Technology who graduated at St. Vincent's College Incorporated."
         else:
-            # If it's not the specific question, use the Cohere API to generate a response.
-            # Adjusted temperature to 0.0 for more direct and deterministic responses.
-            response = co.chat(
-                message=user_message,
-                model="command",
-                temperature=0.0
+            # --- Start of OpenRouter API Call ---
+            # Use the OpenRouter client to generate a response.
+            response = client.chat.completions.create(
+              model="anthropic/claude-3.5-sonnet", # Using the specified model
+              messages=[
+                {
+                  "role": "user",
+                  "content": user_message,
+                },
+              ],
             )
-            ai_response = response.text
+            ai_response = response.choices[0].message.content
+            # --- End of OpenRouter API Call ---
         
         # Return the AI's response and a timestamp as JSON.
         return jsonify({
@@ -64,8 +75,5 @@ def chat():
         }), 500
 
 if __name__ == '__main__':
-    # This block runs when the script is executed directly (e.g., during local development).
-    # When deployed on Render (or similar platforms), Gunicorn will manage running the app.
-    # Render automatically provides the PORT environment variable.
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
