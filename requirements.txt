@@ -1,4 +1,4 @@
 Flask
-cohere
+openai
 python-dotenv
 gunicorn
