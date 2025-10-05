@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, jsonify
-from openai import OpenAI # Changed from 'cohere' to 'openai' for OpenRouter
+from openai import OpenAI
 import os
 from dotenv import load_dotenv
 from datetime import datetime
@@ -9,24 +9,28 @@ load_dotenv()
 
 app = Flask(__name__)
 
-# --- Start of OpenRouter Changes ---
+# --- Start of Groq API Configuration ---
 
-# Initialize OpenRouter client with error handling.
+# Define the model and API endpoint.
+MODEL = "llama-3.1-8b-instant"
+API_BASE_URL = 'https://api.groq.com/openai/v1'
+
+# Initialize Groq client with error handling.
 # The API key is fetched from environment variables for security.
-# IMPORTANT: I've used the key you provided, but you should place this in a .env file
-# like this: OPENROUTER_API_KEY='sk-or-v1-...'
-openrouter_api_key = os.getenv('OPENROUTER_API_KEY')
-if not openrouter_api_key:
+# IMPORTANT: You should place your Groq key in a .env file
+# like this: GROQ_API_KEY='gsk_...'
+groq_api_key = os.getenv('GROQ_API_KEY')
+if not groq_api_key:
     # Raise an error if the API key is not found.
-    raise ValueError("No OpenRouter API key found. Please set OPENROUTER_API_KEY in .env file or as an environment variable.")
+    raise ValueError("No Groq API key found. Please set GROQ_API_KEY in .env file or as an environment variable.")
 
-# Initialize the client, pointing to OpenRouter's API endpoint.
+# Initialize the client, pointing to Groq's API endpoint.
 client = OpenAI(
-  base_url="https://openrouter.ai/api/v1",
-  api_key=openrouter_api_key,
+    base_url=API_BASE_URL,
+    api_key=groq_api_key,
 )
 
-# --- End of OpenRouter Changes ---
+# --- End of Groq API Configuration ---
 
 @app.route('/')
 def home():
@@ -46,19 +50,19 @@ def chat():
         if "who made you" in lower_user_message or "who created you" in lower_user_message or "who develop you" in lower_user_message:
             ai_response = "Jomer John Valmoria Alvarado, a Bachelor Of Science In Information Technology who graduated at St. Vincent's College Incorporated."
         else:
-            # --- Start of OpenRouter API Call ---
-            # Use the OpenRouter client to generate a response.
+            # --- Start of Groq API Call ---
+            # Use the Groq client to generate a response.
             response = client.chat.completions.create(
-              model="anthropic/claude-3.5-sonnet", # Using the specified model
-              messages=[
-                {
-                  "role": "user",
-                  "content": user_message,
-                },
-              ],
+                model=MODEL, # Using the specified model
+                messages=[
+                    {
+                        "role": "user",
+                        "content": user_message,
+                    },
+                ],
             )
             ai_response = response.choices[0].message.content
-            # --- End of OpenRouter API Call ---
+            # --- End of Groq API Call ---
         
         # Return the AI's response and a timestamp as JSON.
         return jsonify({
